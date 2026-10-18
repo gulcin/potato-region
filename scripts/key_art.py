@@ -45,6 +45,7 @@ JOBS: list[tuple[str, str, str]] = [
     ("leafy.jpg", "magenta", "item"),
     ("soil.jpg", "green", "item"),
     ("heart.jpg", "green", "item"),
+    ("emote-wave.jpg", "green", "item"),
     ("basket.jpg", "green", "item"),
     ("water.jpg", "magenta", "item"),
     ("map-bg.jpg", "none", "scene"),

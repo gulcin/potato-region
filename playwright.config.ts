@@ -25,19 +25,30 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command:
-      'VITE_FEEDBACK_URL=http://127.0.0.1:4173/potato-region/api/feedback npm run build && npx vite preview --host 127.0.0.1 --port 4173 --strictPort',
+    command: 'bash scripts/preview-e2e.sh',
     port: 4173,
     timeout: 180_000,
     reuseExistingServer: false,
   },
-  projects: viewports.map((viewport) => ({
-    name: viewport.name,
-    use: {
-      viewport: { width: viewport.width, height: viewport.height },
-      hasTouch: true,
-      deviceScaleFactor: 1,
-      isMobile: viewport.name.startsWith('iphone'),
+  projects: [
+    ...viewports.map((viewport) => ({
+      name: viewport.name,
+      testIgnore: /party\.spec\.ts/,
+      use: {
+        viewport: { width: viewport.width, height: viewport.height },
+        hasTouch: true,
+        deviceScaleFactor: 1,
+        isMobile: viewport.name.startsWith('iphone'),
+      },
+    })),
+    {
+      name: 'play-together',
+      testMatch: /party\.spec\.ts/,
+      use: {
+        viewport: { width: 834, height: 1194 },
+        hasTouch: true,
+        deviceScaleFactor: 1,
+      },
     },
-  })),
+  ],
 });

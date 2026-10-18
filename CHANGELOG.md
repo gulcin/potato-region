@@ -5,6 +5,15 @@ All notable changes to Potato Region are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-10-18
+
+### Added
+
+- Play together, a two to four player farm party in the browser.
+- A picture code, a four-digit code, and a QR code so a friend can join.
+- Smooth painted friends, with planting, watering, harvesting sparkles, and heart, wave, and potato-dance emotes.
+- A gentle reconnect when a connection takes a nap, and a way back to playing alone.
+
 ## [1.0.0] - 2026-10-18
 
 ### Added

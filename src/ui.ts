@@ -3,6 +3,7 @@ import {
   COLOR_LABEL,
   COLORS,
   FURNITURE,
+  NAME_PRESETS,
   OUTFITS,
   PETS,
   SHOP_ITEMS,
@@ -14,6 +15,7 @@ import {
   type ShopTab,
 } from './catalog';
 import { mailtoHref } from './feedback';
+import { friendsElsewhere, partyFarm, partySnapshot, pictureFor } from './party';
 import { screenLabel, type Route } from './route';
 import { owns, state, totalPotatoes, type Note, type Plot } from './state';
 import { numberWords } from './speech';
@@ -37,6 +39,10 @@ export interface View {
   selectedFurn: string | null;
   updateStatus: string;
   happy: boolean;
+  partyOpen: boolean;
+  partyPane: 'pick' | 'host' | 'join' | 'scan';
+  joinCode: string;
+  scanNote: string;
 }
 
 function art(path: string): string {
@@ -137,7 +143,8 @@ export function headerHtml(view: View): string {
       ${onMap ? '' : '<button type="button" data-action="map">Map</button>'}
       <button type="button" data-action="tell">Tell us</button>
       <button type="button" data-action="read" aria-pressed="${state.readAloud ? 'true' : 'false'}">${readLabel}</button>
-    </div>`;
+    </div>
+    <div data-party-slot></div>`;
 }
 
 function bannerHtml(): string {
@@ -151,7 +158,7 @@ function mapHtml(view: View): string {
       <img src="${art(potatoArt(color))}" alt="" draggable="false">
       <span>${COLOR_LABEL[color]}</span>
     </button>`).join('');
-  return `<section class="map-screen" style="background-image:url('${art('art/map-bg.webp')}')">
+  return `<section class="map-screen" data-walk style="background-image:url('${art('art/map-bg.webp')}')">
     <div class="map-body">
       <div class="map-side">
         <div class="companions">
@@ -170,20 +177,22 @@ function mapHtml(view: View): string {
           <button type="button" data-goto="house">My house</button>
           <button type="button" data-action="whatsnew">What's new</button>
           <button type="button" data-action="grownups">Grown-ups</button>
+          <button type="button" data-action="party">Play together</button>
         </div>
         <div data-update-slot>${bannerHtml()}</div>
       </div>
     </div>
+    <div class="people-layer" data-people></div>
   </section>`;
 }
 
 function farmHtml(view: View): string {
   const color = view.route.farm ?? 'blue';
-  const plots = state.plots[color].map((plot, index) => `
+  const plots = (partyFarm() ?? state.plots)[color].map((plot, index) => `
     <button type="button" class="plot" data-plot="${index}" data-stage="${plot.stage}" data-grow="" aria-label="${esc(plotLabel(plot, color))}">
       ${plotInner(color, plot, '')}
     </button>`).join('');
-  return `<section class="farm-screen" data-farm="${color}" style="background-image:url('${art(`art/farm-${color}.webp`)}')">
+  return `<section class="farm-screen" data-walk data-farm="${color}" style="background-image:url('${art(`art/farm-${color}.webp`)}')">
     <div class="farm-hero">
       <p class="hint">Tap soil to plant. Tap again to water. Then pick the potato.</p>
     </div>
@@ -195,6 +204,7 @@ function farmHtml(view: View): string {
         <span>Basket</span>
       </div>
     </div>
+    <div class="people-layer" data-people></div>
   </section>`;
 }
 
@@ -378,7 +388,86 @@ export function stageHtml(view: View): string {
   }
 }
 
+function codePicturesHtml(raw: string): string {
+  const digits = raw.padEnd(4, ' ').slice(0, 4).split('');
+  return digits.map((digit) => {
+    const pic = pictureFor(digit);
+    if (!pic) return '<span class="code-pic empty"></span>';
+    return `<span class="code-pic"><img alt="${esc(pic.word)}" src="${art(pic.art)}" draggable="false"><span>${esc(pic.word)}</span></span>`;
+  }).join('');
+}
+
+export function partySlotHtml(): string {
+  const snap = partySnapshot();
+  if (snap.status === 'idle') return '';
+  const elsewhere = friendsElsewhere().map((friend) => `
+    <button type="button" class="elsewhere" data-goto-friend="${friend.farm}">${esc(friend.name)} is at the ${COLOR_LABEL[friend.farm]} Farm – go there?</button>`).join('');
+  const playing = snap.status === 'connected' || snap.status === 'napping';
+  const emotes = playing
+    ? `<button type="button" class="emote" data-emote="heart" aria-label="Heart"><img src="${art('art/heart.webp')}" alt="" draggable="false"></button>
+       <button type="button" class="emote" data-emote="wave" aria-label="Wave"><img src="${art('art/emote-wave.webp')}" alt="" draggable="false"></button>
+       <button type="button" class="emote" data-emote="dance" aria-label="Potato dance"><img src="${art('art/pet-potato-happy.webp')}" alt="" draggable="false"></button>`
+    : '';
+  return `<div class="party-bar">
+    <p class="party-msg" data-party-message>${esc(snap.message)}</p>
+    ${emotes}
+    <button type="button" data-action="party-leave">Alone</button>
+    ${elsewhere}
+  </div>`;
+}
+
+function partyModalHtml(view: View): string {
+  const snap = partySnapshot();
+  const presets = NAME_PRESETS.map((name) => `
+    <button type="button" data-name-preset="${esc(name)}" aria-pressed="${state.playerName === name ? 'true' : 'false'}">${esc(name)}</button>`).join('');
+  let body = '';
+  if (view.partyPane === 'host') {
+    body = `
+      ${snap.qr ? `<img class="party-qr" data-party-qr alt="Party code" src="${snap.qr}">` : ''}
+      <div class="code-row" data-code-pictures>${codePicturesHtml(snap.code)}</div>
+      <p class="party-code" data-party-code>${esc(snap.code)}</p>
+      <p class="party-msg" data-party-message>${esc(snap.message || 'Opening the farm party…')}</p>
+      <p class="hint">Only a friend with this code can join.</p>
+      <button type="button" data-action="party-close">Let's play</button>`;
+  } else if (view.partyPane === 'scan') {
+    body = `
+      <video data-scan-video playsinline muted autoplay></video>
+      <p data-scan-note>${esc(view.scanNote)}</p>
+      <button type="button" data-action="party-close">Close</button>`;
+  } else if (view.partyPane === 'join') {
+    body = `
+      <label class="name-line">Your name
+        <input data-player-name aria-label="Your name" maxlength="12" value="${esc(state.playerName)}" autocomplete="off">
+      </label>
+      <div class="name-presets">${presets}</div>
+      <label class="name-line">Friend's code
+        <input data-join-code aria-label="Friend's code" inputmode="numeric" maxlength="4" value="${esc(view.joinCode)}" autocomplete="off">
+      </label>
+      <div class="code-row" data-code-pictures>${codePicturesHtml(view.joinCode)}</div>
+      <p class="party-msg" data-party-message>${esc(snap.message)}</p>
+      <button type="button" data-action="party-join">Join</button>
+      <button type="button" data-action="party-scan">Scan</button>
+      <button type="button" data-action="party-close">Close</button>`;
+  } else {
+    body = `
+      <label class="name-line">Your name
+        <input data-player-name aria-label="Your name" maxlength="12" value="${esc(state.playerName)}" autocomplete="off">
+      </label>
+      <div class="name-presets">${presets}</div>
+      <button type="button" data-action="party-start">Start a farm party</button>
+      <button type="button" data-action="party-join-pane">Join</button>`;
+  }
+  return `<div class="modal" data-modal="party">
+    <div class="modal-card" role="dialog" aria-label="Play together">
+      <h2>Play together</h2>
+      ${body}
+      ${view.partyPane === 'pick' ? '<button type="button" data-action="party-close">Close</button>' : ''}
+    </div>
+  </div>`;
+}
+
 export function modalHtml(view: View): string {
+  if (view.partyOpen) return partyModalHtml(view);
   if (!view.tellOpen) return '';
   const draft: Note = {
     id: 'draft',

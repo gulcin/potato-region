@@ -45,6 +45,7 @@ export interface Save {
   readAloud: boolean;
   sound: boolean;
   seenWhatsNew: string;
+  playerName: string;
 }
 
 function emptyPotatoes(): Record<PotatoColor, number> {
@@ -75,6 +76,7 @@ function fresh(): Save {
     readAloud: false,
     sound: true,
     seenWhatsNew: '',
+    playerName: 'Aida',
   };
 }
 
@@ -128,6 +130,7 @@ function revive(raw: unknown): Save {
     readAloud: Boolean(data.readAloud),
     sound: data.sound !== false,
     seenWhatsNew: typeof data.seenWhatsNew === 'string' ? data.seenWhatsNew : '',
+    playerName: cleanName(typeof data.playerName === 'string' ? data.playerName : base.playerName),
   };
 }
 
@@ -198,6 +201,11 @@ export function choosePet(id: string): void {
   const item = itemById(id);
   if (!item || item.kind !== 'pet' || !owns(id)) return;
   state.pet = id;
+  save();
+}
+
+export function setPlayerName(raw: string): void {
+  state.playerName = cleanName(raw);
   save();
 }
 

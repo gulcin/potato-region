@@ -1,0 +1,23 @@
+{
+  "name": "potato-region",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "art": "python3 scripts/key_art.py"
+  },
+  "dependencies": {
+    "@fontsource/fredoka": "^5.3.0",
+    "@fontsource/nunito": "^5.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "playwright": "^1.64.1"
+  }
+}

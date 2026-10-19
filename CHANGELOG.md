@@ -5,6 +5,12 @@ All notable changes to Potato Region are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-10-19
+
+### Fixed
+
+- Play together can reach a friend on another network. The farm party keeps its code if the iPad screen goes dark, and a guest is told to check the code instead of waiting forever.
+
 ## [1.1.0] - 2026-10-18
 
 ### Added

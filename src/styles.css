@@ -1206,6 +1206,17 @@ textarea { height: 4.5rem; resize: none; }
   text-align: center;
 }
 
+.party-bar .host-code {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #fff8ee;
+  border: 2px solid #7a4e2a;
+}
+
 .party-qr {
   width: 140px;
   height: 140px;

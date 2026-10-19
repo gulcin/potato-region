@@ -3,7 +3,7 @@
 Aida's Potato Region is a quiet farming game for an iPad Home Screen. Grow colourful potatoes, trade them, dress up, and fill your house.
 
 **Live:** https://gulcin.github.io/potato-region/
-**Version:** 1.1.0
+**Version:** 1.1.1
 
 ## Play together on two phones
 

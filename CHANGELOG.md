@@ -5,6 +5,12 @@ All notable changes to Potato Region are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-10-19
+
+### Changed
+
+- Aida has long dark blonde hair and blue eyes in every outfit, on the map, the farms, in the shop and the house, in Play together, and on the app icon.
+
 ## [1.1.2] - 2026-10-19
 
 ### Fixed

@@ -104,8 +104,13 @@ test('plays every part of Potato Region', async ({ page }) => {
     return host.__swReg?.updateViaCache === 'none' && host.__versionInits?.includes('no-store');
   });
 
+  await page.locator('[data-goto="dress"]').click();
   await page.locator('[data-pet-name]').fill('Poko');
   await page.locator('[data-pet-name]').blur();
+  await expect(page.locator('[data-pet-label]')).toHaveText('Poko');
+  await page.locator('[data-action="map"]').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'map');
+  await expect(page.locator('[data-pet-name]')).toHaveCount(0);
   await expect(page.locator('[data-pet-label]')).toHaveText('Poko');
   await page.locator('[data-action="read"]').click();
   await expect(page.locator('[data-action="read"]')).toHaveText('Quiet');
@@ -223,11 +228,11 @@ test('plays every part of Potato Region', async ({ page }) => {
   const href = await page.locator('[data-action="mailto"]').getAttribute('href');
   const decoded = decodeURIComponent(href ?? '');
   expect(decoded).toContain('mailto:gulcin.yildirim@clickhouse.com');
-  expect(decoded).toContain('Potato Region report – v1.0.0 – Map');
+  expect(decoded).toContain('Potato Region report – v1.1.0 – Map');
   expect(decoded).toContain('Note: The blue farm is lovely');
   expect(decoded).toContain('Type: bug');
   expect(decoded).toContain('Screen: Map');
-  expect(decoded).toContain('Version: v1.0.0');
+  expect(decoded).toContain('Version: v1.1.0');
   expect(decoded).toContain('Device:');
   expect(decoded).toContain('Timestamp:');
   const posted = page.waitForRequest((request) => request.url().includes('/api/feedback') && request.method() === 'POST');
@@ -267,14 +272,14 @@ test('plays every part of Potato Region', async ({ page }) => {
   await page.locator('[data-key="clear"]').click();
   await expect(page.locator('[data-gate-entry]')).toHaveText('');
   for (const key of ['1', '0', '2', 'ok']) await page.locator(`[data-key="${key}"]`).click();
-  await expect(page.locator('[data-version]')).toHaveText('Version v1.0.0');
+  await expect(page.locator('[data-version]')).toHaveText('Version v1.1.0');
   await expect(page.locator('[data-feedback-list]')).toContainText('The blue farm is lovely');
   await page.locator('[data-action="check-updates"]').click();
   await expect(page.locator('[data-update-status]')).toHaveText('You have the newest game.');
   await expectFit(page);
   await page.locator('[data-action="whatsnew"]').click();
   await expectChrome(page, 'whatsnew');
-  await expect(page.locator('h2')).toContainText("What's new in v1.0.0");
+  await expect(page.locator('h2')).toContainText("What's new in v1.1.0");
   await expectFit(page);
   await page.locator('[data-action="map"]').click();
   await expect(page.locator('#app')).toHaveAttribute('data-screen', 'map');

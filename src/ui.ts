@@ -3,6 +3,7 @@ import {
   COLOR_LABEL,
   COLORS,
   FURNITURE,
+  NAME_PRESETS,
   OUTFITS,
   PETS,
   SHOP_ITEMS,
@@ -14,6 +15,7 @@ import {
   type ShopTab,
 } from './catalog';
 import { mailtoHref } from './feedback';
+import { friendsElsewhere, partyFarm, partySnapshot, pictureFor } from './party';
 import { screenLabel, type Route } from './route';
 import { owns, state, totalPotatoes, type Note, type Plot } from './state';
 import { numberWords } from './speech';
@@ -37,6 +39,10 @@ export interface View {
   selectedFurn: string | null;
   updateStatus: string;
   happy: boolean;
+  partyOpen: boolean;
+  partyPane: 'pick' | 'host' | 'join' | 'scan';
+  joinCode: string;
+  scanNote: string;
 }
 
 function art(path: string): string {
@@ -79,17 +85,16 @@ export function plotWord(plot: Plot): string {
 
 export function plotInner(color: PotatoColor, plot: Plot, phase: string): string {
   const potato = art(potatoArt(color));
-  const bits = [`<img class="soil" alt="" src="${art('art/soil.webp')}" draggable="false">`];
-  if (plot.stage === 'seed') bits.push(`<img class="crop seed" alt="" src="${potato}" draggable="false">`);
-  if (plot.stage === 'watered' && phase === 'sprout') {
-    bits.push(`<img class="crop" alt="" src="${art('art/sprout.webp')}" draggable="false">`);
-  }
-  if (plot.stage === 'watered' && phase !== 'sprout') {
-    bits.push(`<img class="crop" alt="" src="${art('art/leafy.webp')}" draggable="false">`);
-  }
+  const bed = `<img class="bed" alt="" src="${art('art/soil.webp')}" draggable="false">`;
+  const sprout = `<img class="crop sprout" alt="" src="${art('art/sprout.webp')}" draggable="false">`;
+  const leafy = `<img class="crop leafy" alt="" src="${art('art/leafy.webp')}" draggable="false">`;
+  const bits = [bed];
+  if (plot.stage === 'seed' || (plot.stage === 'watered' && phase === 'sprout')) bits.push(sprout);
+  if ((plot.stage === 'watered' && phase !== 'sprout') || plot.stage === 'ready') bits.push(leafy);
   if (plot.stage === 'watered') bits.push(`<img class="splash" alt="" src="${art('art/water.webp')}" draggable="false">`);
   if (plot.stage === 'ready') {
-    bits.push(`<img class="crop" data-harvest-potato data-color="${color}" alt="" src="${potato}" draggable="false">`);
+    bits.push(`<img class="crop ready-potato" data-harvest-potato data-color="${color}" alt="" src="${potato}" draggable="false">`);
+    bits.push('<span class="sparkle" aria-hidden="true"></span>');
   }
   bits.push(`<span class="plot-word">${plotWord(plot)}</span>`);
   return bits.join('');
@@ -129,7 +134,7 @@ export function headerHtml(view: View): string {
   return `<div class="title-row">
       <h1>${esc(titleFor(view.route))}</h1>
       <div class="count-pill" data-potato-label aria-label="${total} potatoes">
-        <img src="${art('art/potato-pink.webp')}" alt="" draggable="false">
+        <img src="${art('art/potato-count.webp')}" alt="" draggable="false">
         <span data-potato-total>${total}</span>
       </div>
     </div>
@@ -137,7 +142,8 @@ export function headerHtml(view: View): string {
       ${onMap ? '' : '<button type="button" data-action="map">Map</button>'}
       <button type="button" data-action="tell">Tell us</button>
       <button type="button" data-action="read" aria-pressed="${state.readAloud ? 'true' : 'false'}">${readLabel}</button>
-    </div>`;
+    </div>
+    <div data-party-slot></div>`;
 }
 
 function bannerHtml(): string {
@@ -148,10 +154,12 @@ function bannerHtml(): string {
 function mapHtml(view: View): string {
   const farms = COLORS.map((color) => `
     <button type="button" class="farm-card" data-goto-farm="${color}" aria-label="${COLOR_LABEL[color]} farm">
-      <img src="${art(potatoArt(color))}" alt="" draggable="false">
-      <span>${COLOR_LABEL[color]}</span>
+      <span class="wood-sign">
+        <img src="${art(potatoArt(color))}" alt="" draggable="false">
+        <span>${COLOR_LABEL[color]}</span>
+      </span>
     </button>`).join('');
-  return `<section class="map-screen" style="background-image:url('${art('art/map-bg.webp')}')">
+  return `<section class="map-screen" data-walk style="background-image:url('${art('art/map-bg.webp')}')">
     <div class="map-body">
       <div class="map-side">
         <div class="companions">
@@ -159,7 +167,6 @@ function mapHtml(view: View): string {
           <div class="stroll-pet">${petHtml(view.happy)}</div>
         </div>
         <p class="name-tag" data-pet-label>${esc(state.petName)}</p>
-        <input data-pet-name aria-label="Name your potato" maxlength="12" value="${esc(state.petName)}" autocomplete="off">
       </div>
       <div class="map-main">
         <p class="hint">Pick a place to go.</p>
@@ -170,31 +177,37 @@ function mapHtml(view: View): string {
           <button type="button" data-goto="house">My house</button>
           <button type="button" data-action="whatsnew">What's new</button>
           <button type="button" data-action="grownups">Grown-ups</button>
+          <button type="button" data-action="party">Play together</button>
         </div>
         <div data-update-slot>${bannerHtml()}</div>
       </div>
     </div>
+    <div class="people-layer" data-people></div>
   </section>`;
 }
 
 function farmHtml(view: View): string {
   const color = view.route.farm ?? 'blue';
-  const plots = state.plots[color].map((plot, index) => `
+  const plots = (partyFarm() ?? state.plots)[color].map((plot, index) => `
     <button type="button" class="plot" data-plot="${index}" data-stage="${plot.stage}" data-grow="" aria-label="${esc(plotLabel(plot, color))}">
       ${plotInner(color, plot, '')}
     </button>`).join('');
-  return `<section class="farm-screen" data-farm="${color}" style="background-image:url('${art(`art/farm-${color}.webp`)}')">
+  return `<section class="farm-screen" data-walk data-farm="${color}" style="background-image:url('${art(`art/farm-${color}.webp`)}')">
     <div class="farm-hero">
       <p class="hint">Tap soil to plant. Tap again to water. Then pick the potato.</p>
     </div>
     <div class="plot-grid">${plots}</div>
     <div class="farm-bottom">
-      ${petHtml(view.happy)}
+      <div class="farm-cast">
+        ${dollHtml()}
+        ${petHtml(view.happy)}
+      </div>
       <div class="basket" data-basket>
         <img src="${art('art/basket.webp')}" alt="" draggable="false">
         <span>Basket</span>
       </div>
     </div>
+    <div class="people-layer" data-people></div>
   </section>`;
 }
 
@@ -235,7 +248,7 @@ function shopHtml(view: View): string {
     <div class="pay-row">
       <div class="counter-zone" data-counter>
         <div class="count-num" data-counter-count aria-live="polite">${state.counter.length}</div>
-        <p>on the counter</p>
+        <p>Counter</p>
       </div>
       <div class="pocket" data-pocket>${pocket || '<p class="hint">Farm some potatoes first.</p>'}</div>
     </div>
@@ -308,8 +321,12 @@ function houseHtml(view: View): string {
   if (selected && !owns(selected.id)) status = `${selected.name} is in the shop.`;
   else if (selected && isPlaced) status = `${selected.name} is in the room. Drag it, or put it away.`;
   else if (selected) status = `${selected.name}. Tap Place.`;
+  const outfit = itemById(state.outfit) ?? OUTFITS[0];
   return `<section class="house-screen">
-    <div class="room" data-room style="background-image:url('${art('art/house-bg.webp')}')">${placed}</div>
+    <div class="room" data-room style="background-image:url('${art('art/house-bg.webp')}')">
+      <img class="room-friend" alt="" src="${art(outfit.art)}" draggable="false">
+      ${placed}
+    </div>
     <p class="hint" data-house-status>${esc(status)}</p>
     <div class="house-actions">
       <button type="button" data-action="place" ${canPlace ? '' : 'disabled'}>Place</button>
@@ -378,7 +395,86 @@ export function stageHtml(view: View): string {
   }
 }
 
+function codePicturesHtml(raw: string): string {
+  const digits = raw.padEnd(4, ' ').slice(0, 4).split('');
+  return digits.map((digit) => {
+    const pic = pictureFor(digit);
+    if (!pic) return '<span class="code-pic empty"></span>';
+    return `<span class="code-pic"><img alt="${esc(pic.word)}" src="${art(pic.art)}" draggable="false"><span>${esc(pic.word)}</span></span>`;
+  }).join('');
+}
+
+export function partySlotHtml(): string {
+  const snap = partySnapshot();
+  if (snap.status === 'idle') return '';
+  const elsewhere = friendsElsewhere().map((friend) => `
+    <button type="button" class="elsewhere" data-goto-friend="${friend.farm}">${esc(friend.name)} is at the ${COLOR_LABEL[friend.farm]} Farm – go there?</button>`).join('');
+  const playing = snap.status === 'connected' || snap.status === 'napping';
+  const emotes = playing
+    ? `<button type="button" class="emote" data-emote="heart" aria-label="Heart"><img src="${art('art/heart.webp')}" alt="" draggable="false"></button>
+       <button type="button" class="emote" data-emote="wave" aria-label="Wave"><img src="${art('art/emote-wave.webp')}" alt="" draggable="false"></button>
+       <button type="button" class="emote" data-emote="dance" aria-label="Potato dance"><img src="${art('art/pet-potato-happy.webp')}" alt="" draggable="false"></button>`
+    : '';
+  return `<div class="party-bar">
+    <p class="party-msg" data-party-message>${esc(snap.message)}</p>
+    ${emotes}
+    <button type="button" data-action="party-leave">Alone</button>
+    ${elsewhere}
+  </div>`;
+}
+
+function partyModalHtml(view: View): string {
+  const snap = partySnapshot();
+  const presets = NAME_PRESETS.map((name) => `
+    <button type="button" data-name-preset="${esc(name)}" aria-pressed="${state.playerName === name ? 'true' : 'false'}">${esc(name)}</button>`).join('');
+  let body = '';
+  if (view.partyPane === 'host') {
+    body = `
+      ${snap.qr ? `<img class="party-qr" data-party-qr alt="Party code" src="${snap.qr}">` : ''}
+      <div class="code-row" data-code-pictures>${codePicturesHtml(snap.code)}</div>
+      <p class="party-code" data-party-code>${esc(snap.code)}</p>
+      <p class="party-msg" data-party-message>${esc(snap.message || 'Opening the farm party…')}</p>
+      <p class="hint">Only a friend with this code can join.</p>
+      <button type="button" data-action="party-close">Let's play</button>`;
+  } else if (view.partyPane === 'scan') {
+    body = `
+      <video data-scan-video playsinline muted autoplay></video>
+      <p data-scan-note>${esc(view.scanNote)}</p>
+      <button type="button" data-action="party-close">Close</button>`;
+  } else if (view.partyPane === 'join') {
+    body = `
+      <label class="name-line">Your name
+        <input data-player-name aria-label="Your name" maxlength="12" value="${esc(state.playerName)}" autocomplete="off">
+      </label>
+      <div class="name-presets">${presets}</div>
+      <label class="name-line">Friend's code
+        <input data-join-code aria-label="Friend's code" inputmode="numeric" maxlength="4" value="${esc(view.joinCode)}" autocomplete="off">
+      </label>
+      <div class="code-row" data-code-pictures>${codePicturesHtml(view.joinCode)}</div>
+      <p class="party-msg" data-party-message>${esc(snap.message)}</p>
+      <button type="button" data-action="party-join">Join</button>
+      <button type="button" data-action="party-scan">Scan</button>
+      <button type="button" data-action="party-close">Close</button>`;
+  } else {
+    body = `
+      <label class="name-line">Your name
+        <input data-player-name aria-label="Your name" maxlength="12" value="${esc(state.playerName)}" autocomplete="off">
+      </label>
+      <div class="name-presets">${presets}</div>
+      <button type="button" data-action="party-start">Start a farm party</button>
+      <button type="button" data-action="party-join-pane">Join</button>`;
+  }
+  return `<div class="modal" data-modal="party">
+    <div class="modal-card" role="dialog" aria-label="Play together">
+      <h2>Play together</h2>
+      ${body}
+      ${view.partyPane === 'pick' ? '<button type="button" data-action="party-close">Close</button>' : ''}
+    </div>
+  </div>`;
+}
+
 export function modalHtml(view: View): string {
+  if (view.partyOpen) return partyModalHtml(view);
   if (!view.tellOpen) return '';
   const draft: Note = {
     id: 'draft',

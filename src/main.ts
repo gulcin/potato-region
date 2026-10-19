@@ -11,6 +11,25 @@ import {
   type ShopTab,
 } from './catalog';
 import { flushFeedback, makeNote, mailtoHref, storeNote } from './feedback';
+import {
+  bindParty,
+  inParty,
+  joinParty,
+  leaveParty,
+  moveTo,
+  notePresence,
+  partyFarm,
+  partySparkle,
+  partySnapshot,
+  peopleHere,
+  performFarmAction,
+  readJoinHash,
+  sendEmote,
+  startParty,
+  startScan,
+  stopScan,
+  type Emote,
+} from './party';
 import { hashFor, parseRoute, screenLabel } from './route';
 import {
   choosePet,
@@ -19,6 +38,7 @@ import {
   placeOnCounter,
   save,
   setPetName,
+  setPlayerName,
   state,
   totalPotatoes,
   wearAccessory,
@@ -30,6 +50,7 @@ import { APP_VERSION, applyUpdate, checkForUpdates, initUpdates, isUpdateReady }
 import {
   headerHtml,
   modalHtml,
+  partySlotHtml,
   plotInner,
   plotLabel,
   screenIntro,
@@ -58,6 +79,12 @@ let updateStatus = '';
 let happyUntil = 0;
 let suppressClick = false;
 let lastSpoken = '';
+let partyOpen = false;
+let partyPane: View['partyPane'] = 'pick';
+let joinCode = '';
+let scanNote = '';
+let peopleKey = '';
+let slotHtml = '';
 
 interface DragState {
   pointerId: number;
@@ -90,6 +117,10 @@ function view(): View {
     selectedFurn,
     updateStatus,
     happy: Date.now() < happyUntil,
+    partyOpen,
+    partyPane,
+    joinCode,
+    scanNote,
   };
 }
 
@@ -106,6 +137,11 @@ function render(): void {
   header.innerHTML = headerHtml(current);
   stage.innerHTML = stageHtml(current);
   modal.innerHTML = modalHtml(current);
+  peopleKey = '';
+  slotHtml = '';
+  paintPartySlot();
+  paintPeople();
+  attachScan();
   const key = `${current.route.screen}:${current.route.farm ?? ''}`;
   if (key !== lastSpoken) {
     lastSpoken = key;
@@ -115,9 +151,19 @@ function render(): void {
 
 function go(screen: View['route']['screen'], farm?: PotatoColor): void {
   tellOpen = false;
+  closePartyModal();
   const next = hashFor(screen, farm);
-  if (location.hash === next) render();
-  else location.hash = next;
+  if (location.hash === next) {
+    render();
+    notePresence();
+  } else location.hash = next;
+}
+
+function closePartyModal(): void {
+  if (!partyOpen && !scanNote) return;
+  partyOpen = false;
+  scanNote = '';
+  stopScan();
 }
 
 function growthPhase(plot: Plot): string {
@@ -190,7 +236,26 @@ function refreshBanner(): void {
     : '';
 }
 
+const PLOT_SPOTS = [
+  { x: 36, y: 80 },
+  { x: 52, y: 80 },
+  { x: 68, y: 80 },
+  { x: 84, y: 80 },
+];
+
+function standByPlot(index: number): void {
+  const spot = PLOT_SPOTS[index] ?? PLOT_SPOTS[0];
+  moveTo(spot.x, spot.y);
+}
+
 function harvest(color: PotatoColor, index: number): void {
+  if (inParty()) {
+    const plot = partyFarm()?.[color]?.[index];
+    if (!plot || plot.stage !== 'ready') return;
+    performFarmAction('harvest', color, index);
+    standByPlot(index);
+    return;
+  }
   const plot = state.plots[color][index];
   if (!plot || plot.stage !== 'ready') return;
   plot.stage = 'empty';
@@ -203,6 +268,106 @@ function harvest(color: PotatoColor, index: number): void {
   const el = document.querySelector<HTMLElement>(`[data-plot="${index}"]`);
   if (el && parseRoute().farm === color) paintPlot(el, plot, color);
   paintCount();
+}
+
+function paintPartySlot(): void {
+  const slot = document.querySelector('[data-party-slot]');
+  if (!slot) return;
+  const html = partySlotHtml();
+  if (html === slotHtml) return;
+  slotHtml = html;
+  slot.innerHTML = html;
+}
+
+function repaintPartyFarm(): void {
+  const route = parseRoute();
+  if (route.screen !== 'farm' || !route.farm) return;
+  const plots = partyFarm()?.[route.farm];
+  if (!plots) return;
+  const spark = partySparkle();
+  plots.forEach((plot, index) => {
+    const el = document.querySelector<HTMLElement>(`[data-plot="${index}"]`);
+    if (!el) return;
+    paintPlot(el, plot, route.farm as PotatoColor);
+    if (spark && spark.color === route.farm && spark.index === index) el.dataset.sparkle = spark.kind;
+    else delete el.dataset.sparkle;
+  });
+}
+
+function isMum(name: string): boolean {
+  return name.trim().toLowerCase() === 'mum';
+}
+
+function walkerHtml(person: ReturnType<typeof peopleHere>[number]): string {
+  const outfit = itemById(person.outfit);
+  const accessory = itemById(person.accessory);
+  const pet = itemById(person.pet);
+  const grown = isMum(person.name);
+  const body = grown ? 'art/mum.webp' : (outfit?.art ?? 'art/girl-farm.webp');
+  const extra = !grown && accessory && accessory.id !== 'none' && accessory.art
+    ? `<img class="doll-acc acc-${accessory.id}" alt="" src="${import.meta.env.BASE_URL}${accessory.art}" draggable="false">`
+    : '';
+  const pops: Record<string, string> = {
+    heart: 'art/heart.webp',
+    wave: 'art/emote-wave.webp',
+    dance: 'art/pet-potato-happy.webp',
+    plant: 'art/sprout.webp',
+    water: 'art/water.webp',
+    harvest: 'art/heart.webp',
+  };
+  const pop = person.emote ? pops[person.emote] : person.action ? pops[person.action] : '';
+  const petSrc = pet ? `${import.meta.env.BASE_URL}${pet.art}` : '';
+  return `<div class="walker" data-person="${person.id}" data-self="${person.self ? 'true' : 'false'}" data-remote="${person.self ? 'false' : 'true'}" data-grown="${grown ? 'true' : 'false'}" data-x="${person.x.toFixed(1)}" data-y="${person.y.toFixed(1)}" data-emote="${person.emote ?? ''}" data-action="${person.action ?? ''}" style="left:${person.x}%;top:${person.y}%">
+    <div class="doll">
+      <img class="doll-body" alt="" src="${import.meta.env.BASE_URL}${body}" draggable="false">
+      ${extra}
+    </div>
+    ${petSrc ? `<img class="walker-pet" alt="" src="${petSrc}" draggable="false">` : ''}
+    <span class="walker-name">${person.name.replaceAll('&', '&amp;').replaceAll('<', '&lt;')}</span>
+    ${pop ? `<img class="walker-pop" alt="" src="${import.meta.env.BASE_URL}${pop}" draggable="false">` : ''}
+  </div>`;
+}
+
+function paintPeople(): void {
+  const layer = document.querySelector('[data-people]');
+  if (!layer) return;
+  const people = peopleHere();
+  const key = people.map((person) => `${person.id}|${person.outfit}|${person.accessory}|${person.pet}|${person.emote ?? ''}|${person.action ?? ''}|${person.name}`).join(';');
+  if (key !== peopleKey) {
+    peopleKey = key;
+    layer.innerHTML = people.map((person) => walkerHtml(person)).join('');
+  }
+  for (const person of people) {
+    const el = layer.querySelector<HTMLElement>(`[data-person="${person.id}"]`);
+    if (!el) continue;
+    el.style.left = `${person.x}%`;
+    el.style.top = `${person.y}%`;
+    el.dataset.x = person.x.toFixed(1);
+    el.dataset.y = person.y.toFixed(1);
+  }
+}
+
+function attachScan(): void {
+  if (!partyOpen || partyPane !== 'scan') return;
+  const video = document.querySelector('video[data-scan-video]');
+  if (!(video instanceof HTMLVideoElement) || video.srcObject) return;
+  void startScan(video, (found) => {
+    joinCode = found;
+    partyPane = 'join';
+    scanNote = '';
+    render();
+    joinParty(found);
+  }).then((note) => {
+    if (!note) return;
+    scanNote = note;
+    const el = document.querySelector('[data-scan-note]');
+    if (el) el.textContent = note;
+  });
+}
+
+function readPlayerName(): void {
+  const field = document.querySelector<HTMLInputElement>('[data-player-name]');
+  if (field) setPlayerName(field.value);
 }
 
 function over(selector: string, x: number, y: number, pad = 12): boolean {
@@ -239,6 +404,70 @@ function onClick(event: Event): void {
   }
   if (goto === 'shop' || goto === 'dress' || goto === 'house') {
     go(goto);
+    return;
+  }
+  const emote = target.closest<HTMLElement>('[data-emote]')?.dataset.emote;
+  if (emote === 'heart' || emote === 'wave' || emote === 'dance') {
+    sendEmote(emote as Emote);
+    return;
+  }
+  const friendFarm = target.closest<HTMLElement>('[data-goto-friend]')?.dataset.gotoFriend as PotatoColor | undefined;
+  if (friendFarm && (COLORS as readonly string[]).includes(friendFarm)) {
+    go('farm', friendFarm);
+    return;
+  }
+  const preset = target.closest<HTMLElement>('[data-name-preset]')?.dataset.namePreset;
+  if (preset) {
+    setPlayerName(preset);
+    notePresence();
+    render();
+    return;
+  }
+  if (action === 'party') {
+    tellOpen = false;
+    partyOpen = true;
+    partyPane = 'pick';
+    scanNote = '';
+    render();
+    return;
+  }
+  if (action === 'party-start') {
+    readPlayerName();
+    notePresence();
+    startParty();
+    partyPane = 'host';
+    render();
+    return;
+  }
+  if (action === 'party-join-pane') {
+    readPlayerName();
+    partyPane = 'join';
+    render();
+    return;
+  }
+  if (action === 'party-join') {
+    readPlayerName();
+    const field = document.querySelector<HTMLInputElement>('[data-join-code]');
+    if (field) joinCode = field.value.replace(/\D/g, '').slice(0, 4);
+    notePresence();
+    joinParty(joinCode);
+    return;
+  }
+  if (action === 'party-scan') {
+    partyPane = 'scan';
+    scanNote = '';
+    render();
+    return;
+  }
+  if (action === 'party-close') {
+    closePartyModal();
+    render();
+    return;
+  }
+  if (action === 'party-leave') {
+    leaveParty();
+    closePartyModal();
+    render();
     return;
   }
   if (action === 'map') return go('map');
@@ -342,6 +571,20 @@ function onClick(event: Event): void {
   if (plotEl && parseRoute().screen === 'farm' && parseRoute().farm) {
     const color = parseRoute().farm as PotatoColor;
     const index = Number(plotEl.dataset.plot);
+    if (inParty()) {
+      const plot = partyFarm()?.[color]?.[index];
+      if (!plot) return;
+      if (plot.stage === 'empty') {
+        performFarmAction('plant', color, index);
+        standByPlot(index);
+        chime('plant');
+      } else if (plot.stage === 'seed') {
+        performFarmAction('water', color, index);
+        standByPlot(index);
+        chime('water');
+      } else if (plot.stage === 'ready') harvest(color, index);
+      return;
+    }
     const plot = state.plots[color][index];
     if (!plot) return;
     if (plot.stage === 'empty') {
@@ -381,16 +624,19 @@ function onClick(event: Event): void {
   }
   if (wear?.dataset.wear) {
     wearOutfit(wear.dataset.wear);
+    notePresence();
     render();
     return;
   }
   if (acc?.dataset.wearAcc) {
     wearAccessory(acc.dataset.wearAcc);
+    notePresence();
     render();
     return;
   }
   if (pet?.dataset.choosePet) {
     choosePet(pet.dataset.choosePet);
+    notePresence();
     celebrate();
     render();
     return;
@@ -467,6 +713,20 @@ function placeFurniture(id: string): void {
 
 function onInput(event: Event): void {
   const target = event.target as HTMLElement | null;
+  if (target instanceof HTMLInputElement && target.matches('[data-join-code]')) {
+    joinCode = target.value.replace(/\D/g, '').slice(0, 4);
+    if (target.value !== joinCode) target.value = joinCode;
+    const row = document.querySelector('[data-code-pictures]');
+    if (row) {
+      const pics = joinCode.padEnd(4, ' ').slice(0, 4).split('').map((digit) => {
+        const art = ['art/potato-blue.webp', 'art/potato-green.webp', 'art/potato-red.webp', 'art/potato-purple.webp', 'art/potato-pink.webp', 'art/potato-orange.webp', 'art/potato-turquoise.webp', 'art/potato-lilac.webp', 'art/heart.webp', 'art/sprout.webp'][Number(digit)];
+        const word = ['blue', 'green', 'red', 'purple', 'pink', 'orange', 'splash', 'lilac', 'heart', 'sprout'][Number(digit)];
+        if (!art || Number.isNaN(Number(digit))) return '<span class="code-pic empty"></span>';
+        return `<span class="code-pic"><img alt="${word}" src="${import.meta.env.BASE_URL}${art}" draggable="false"><span>${word}</span></span>`;
+      }).join('');
+      row.innerHTML = pics;
+    }
+  }
   if (target instanceof HTMLInputElement && target.matches('[data-pet-name]')) {
     const label = document.querySelector('[data-pet-label]');
     if (label) label.textContent = target.value.trim() || 'Pip';
@@ -480,7 +740,14 @@ function onInput(event: Event): void {
 
 function onBlur(event: Event): void {
   const target = event.target as HTMLElement | null;
-  if (!(target instanceof HTMLInputElement) || !target.matches('[data-pet-name]')) return;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.matches('[data-player-name]')) {
+    setPlayerName(target.value);
+    target.value = state.playerName;
+    notePresence();
+    return;
+  }
+  if (!target.matches('[data-pet-name]')) return;
   setPetName(target.value);
   target.value = state.petName;
   const label = document.querySelector('[data-pet-label]');
@@ -506,7 +773,15 @@ function onPointerDown(event: PointerEvent): void {
   const placed = target.closest<HTMLElement>('[data-placed]');
   const plot = target.closest<HTMLElement>('[data-plot]');
   const ready = plot?.dataset.stage === 'ready';
-  if (!pocket && !placed && !ready) return;
+  if (!pocket && !placed && !ready) {
+    if (!inParty()) return;
+    const walk = target.closest<HTMLElement>('[data-walk]');
+    if (!walk || target.closest('button, a, input, textarea, label')) return;
+    const rect = walk.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    moveTo(((event.clientX - rect.left) / rect.width) * 100, ((event.clientY - rect.top) / rect.height) * 100);
+    return;
+  }
   event.preventDefault();
   suppressClick = true;
   const point = { x: event.clientX, y: event.clientY };
@@ -625,7 +900,7 @@ function tick(): void {
         delete plot.wateredAt;
         grew = true;
       }
-      if (parseRoute().screen === 'farm' && parseRoute().farm === color) {
+      if (!inParty() && parseRoute().screen === 'farm' && parseRoute().farm === color) {
         const el = document.querySelector<HTMLElement>(`[data-plot="${index}"]`);
         if (el) paintPlot(el, plot, color);
       }
@@ -635,13 +910,44 @@ function tick(): void {
     save();
     celebrate();
   }
+  if (inParty()) repaintPartyFarm();
 }
 
 function boot(): void {
-  if (!location.hash) location.replace('#/');
+  const pendingJoin = readJoinHash();
+  if (pendingJoin) {
+    history.replaceState(null, '', `${location.pathname}${location.search}#/`);
+    partyOpen = true;
+    partyPane = 'join';
+    joinCode = pendingJoin;
+  } else if (!location.hash) location.replace('#/');
+  bindParty({
+    onFarm: () => repaintPartyFarm(),
+    onPeople: () => {
+      paintPeople();
+      paintPartySlot();
+    },
+    onStatus: () => {
+      const snap = partySnapshot();
+      const wasOpen = partyOpen;
+      if (partyOpen && partyPane === 'join' && snap.status === 'connected') closePartyModal();
+      if (partyOpen || wasOpen) render();
+      else {
+        paintPartySlot();
+        paintPeople();
+      }
+    },
+    onAward: (color) => {
+      chime('pick');
+      celebrate();
+      paintCount();
+      speak(`A ${color} potato for ${state.playerName}.`);
+    },
+  });
   window.addEventListener('hashchange', () => {
     tellOpen = false;
     render();
+    notePresence();
   });
   document.body.addEventListener('click', onClick);
   document.body.addEventListener('input', onInput);
@@ -655,6 +961,7 @@ function boot(): void {
   });
   window.setInterval(tick, 200);
   render();
+  if (pendingJoin) joinParty(pendingJoin);
   void initUpdates(refreshBanner);
   void flushFeedback();
 }

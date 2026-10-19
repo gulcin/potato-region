@@ -14,12 +14,13 @@ ICON_DIR = Path("/workspace/public")
 # name, key (green|magenta|none), mode (body|pet|item|scene|icon)
 JOBS: list[tuple[str, str, str]] = [
     ("girl-farm.jpg", "green", "body"),
+    ("mum.jpg", "green", "body"),
     ("girl-strap.jpg", "green", "body"),
     ("girl-pink.jpg", "green", "body"),
     ("girl-coat.jpg", "green", "body"),
     ("girl-party.jpg", "green", "body"),
-    ("pet-potato.jpg", "green", "pet"),
-    ("pet-potato-happy.jpg", "green", "pet"),
+    ("pet-potato.jpg", "magenta", "pet"),
+    ("pet-potato-happy.jpg", "magenta", "pet"),
     ("pet-chihuahua.jpg", "green", "pet"),
     ("pet-bird.jpg", "green", "pet"),
     ("pet-bunny.jpg", "green", "pet"),
@@ -27,6 +28,7 @@ JOBS: list[tuple[str, str, str]] = [
     ("acc-headband.jpg", "magenta", "item"),
     ("acc-crown.jpg", "magenta", "item"),
     ("acc-hat.jpg", "green", "item"),
+    ("potato-count.jpg", "green", "item"),
     ("potato-blue.jpg", "green", "item"),
     ("potato-green.jpg", "magenta", "item"),
     ("potato-red.jpg", "green", "item"),
@@ -43,8 +45,10 @@ JOBS: list[tuple[str, str, str]] = [
     ("furn-chair.jpg", "green", "item"),
     ("sprout.jpg", "magenta", "item"),
     ("leafy.jpg", "magenta", "item"),
-    ("soil.jpg", "green", "item"),
+    ("soil.jpg", "green", "bed"),
+    ("wood-sign.jpg", "green", "sign"),
     ("heart.jpg", "green", "item"),
+    ("emote-wave.jpg", "green", "item"),
     ("basket.jpg", "green", "item"),
     ("water.jpg", "magenta", "item"),
     ("map-bg.jpg", "none", "scene"),
@@ -72,9 +76,11 @@ def key_color(im: Image.Image, kind: str) -> Image.Image:
         hard = (g > 165) & (g > r + 40) & (g > b + 40)
         soft = (g > 130) & (g > r + 22) & (g > b + 22) & ~hard
     else:
-        # These screens came back hot pink, about rgb(230, 6, 130), not pure magenta.
-        hard = (r > 165) & (g < 90) & (b > 80) & (b < 200) & (r > g + 70) & (r > b + 30)
-        soft = (r > 145) & (g < 110) & (b > 70) & (b < 215) & (r > g + 50) & (r > b + 15) & ~hard
+        # Hot pink screens are about rgb(230, 6, 130). Pure magenta screens are about rgb(248, 5, 221).
+        hot = (r > 165) & (g < 80) & (b > 80) & (b < 200) & (r > g + 70) & (r > b + 30)
+        pure = (r > 200) & (b > 180) & (g < 45) & (r > g + 100) & (b > g + 100)
+        hard = hot | pure
+        soft = (r > 170) & (b > 140) & (g < 75) & (g >= 45) & (r > g + 80) & (b > g + 70) & ~hard
     alpha = np.full(r.shape, 255, np.uint8)
     alpha[hard] = 0
     alpha[soft] = 40
@@ -86,6 +92,8 @@ def key_color(im: Image.Image, kind: str) -> Image.Image:
         spill = edge & (r > g + 25) & (b > g + 10)
         r = np.where(spill, (r + g) // 2, r)
         b = np.where(spill, (b * 2 + g) // 3, b)
+        fringe = (g < 95) & (r > 145) & (b > 110) & (r > g + 45) & (b > g + 35)
+        alpha[fringe] = 0
     arr[:, :, 0] = np.clip(r, 0, 255).astype(np.uint8)
     arr[:, :, 1] = np.clip(g, 0, 255).astype(np.uint8)
     arr[:, :, 2] = np.clip(b, 0, 255).astype(np.uint8)
@@ -116,6 +124,19 @@ def place(im: Image.Image, size: tuple[int, int], fill: float, feet: bool) -> Im
     y = canvas_h - nh - int(canvas_h * 0.02) if feet else (canvas_h - nh) // 2
     out.paste(crop, (x, y), crop)
     return out
+
+
+def redden(im: Image.Image) -> Image.Image:
+    """Push a brownish tuber toward a clearly red potato without touching the green screen."""
+    arr = np.array(im.convert("RGBA"))
+    r = arr[:, :, 0].astype(np.int16)
+    g = arr[:, :, 1].astype(np.int16)
+    b = arr[:, :, 2].astype(np.int16)
+    screen = (g > 170) & (g > r + 35) & (g > b + 35)
+    arr[:, :, 0] = np.where(screen, r, np.clip(r + 36, 0, 255)).astype(np.uint8)
+    arr[:, :, 1] = np.where(screen, g, np.clip(g * 55 // 100, 0, 255)).astype(np.uint8)
+    arr[:, :, 2] = np.where(screen, b, np.clip(b * 50 // 100, 0, 255)).astype(np.uint8)
+    return Image.fromarray(arr)
 
 
 def save_webp(im: Image.Image, path: Path, quality: int = 82) -> None:
@@ -181,12 +202,18 @@ def main() -> None:
             im.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
             save_webp(im, OUT / (Path(filename).stem + ".webp"), 80)
             continue
+        if filename == "potato-red.jpg":
+            im = redden(im)
         if key != "none":
             im = key_color(im, key)
         if mode == "body":
             im = place(im, (700, 1000), 0.94, True)
         elif mode == "pet":
             im = place(im, (800, 800), 0.92, True)
+        elif mode == "bed":
+            im = place(im, (960, 420), 0.98, False)
+        elif mode == "sign":
+            im = place(im, (640, 760), 0.96, False)
         else:
             im = place(im, (640, 640), 0.9, False)
         save_webp(im, OUT / (Path(filename).stem + ".webp"), 84)

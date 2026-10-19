@@ -67,11 +67,28 @@ export const COLOR_LABEL: Record<PotatoColor, string> = {
 };
 
 export const WHATS_NEW = [
-  'Welcome to Potato Region.',
-  'Grow colourful potatoes on every farm.',
-  'Trade them at Potato Trade Deals.',
-  'Dress up, choose a pet, and fill your house.',
-  'Your game stays saved on this device.',
+  'Play together on one farm.',
+  'Start a farm party and share the picture code.',
+  'You can see your friend walk, plant, and wave.',
+  'Your clothes, pet, house, and potatoes stay yours.',
+  'You can play alone again any time.',
+];
+
+export const MAX_PARTY = 4;
+
+export const NAME_PRESETS = ['Aida', 'Mum', 'Papa', 'Friend'] as const;
+
+export const CODE_PICTURES: { word: string; art: string }[] = [
+  { word: 'blue', art: 'art/potato-blue.webp' },
+  { word: 'green', art: 'art/potato-green.webp' },
+  { word: 'red', art: 'art/potato-red.webp' },
+  { word: 'purple', art: 'art/potato-purple.webp' },
+  { word: 'pink', art: 'art/potato-pink.webp' },
+  { word: 'orange', art: 'art/potato-orange.webp' },
+  { word: 'splash', art: 'art/potato-turquoise.webp' },
+  { word: 'lilac', art: 'art/potato-lilac.webp' },
+  { word: 'heart', art: 'art/heart.webp' },
+  { word: 'sprout', art: 'art/sprout.webp' },
 ];
 
 export function itemById(id: string): Item | undefined {

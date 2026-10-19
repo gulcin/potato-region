@@ -294,11 +294,17 @@ function repaintPartyFarm(): void {
   });
 }
 
+function isMum(name: string): boolean {
+  return name.trim().toLowerCase() === 'mum';
+}
+
 function walkerHtml(person: ReturnType<typeof peopleHere>[number]): string {
   const outfit = itemById(person.outfit);
   const accessory = itemById(person.accessory);
   const pet = itemById(person.pet);
-  const extra = accessory && accessory.id !== 'none' && accessory.art
+  const grown = isMum(person.name);
+  const body = grown ? 'art/mum.webp' : (outfit?.art ?? 'art/girl-farm.webp');
+  const extra = !grown && accessory && accessory.id !== 'none' && accessory.art
     ? `<img class="doll-acc acc-${accessory.id}" alt="" src="${import.meta.env.BASE_URL}${accessory.art}" draggable="false">`
     : '';
   const pops: Record<string, string> = {
@@ -311,9 +317,9 @@ function walkerHtml(person: ReturnType<typeof peopleHere>[number]): string {
   };
   const pop = person.emote ? pops[person.emote] : person.action ? pops[person.action] : '';
   const petSrc = pet ? `${import.meta.env.BASE_URL}${pet.art}` : '';
-  return `<div class="walker" data-person="${person.id}" data-self="${person.self ? 'true' : 'false'}" data-remote="${person.self ? 'false' : 'true'}" data-x="${person.x.toFixed(1)}" data-y="${person.y.toFixed(1)}" data-emote="${person.emote ?? ''}" data-action="${person.action ?? ''}" style="left:${person.x}%;top:${person.y}%">
+  return `<div class="walker" data-person="${person.id}" data-self="${person.self ? 'true' : 'false'}" data-remote="${person.self ? 'false' : 'true'}" data-grown="${grown ? 'true' : 'false'}" data-x="${person.x.toFixed(1)}" data-y="${person.y.toFixed(1)}" data-emote="${person.emote ?? ''}" data-action="${person.action ?? ''}" style="left:${person.x}%;top:${person.y}%">
     <div class="doll">
-      <img class="doll-body" alt="" src="${import.meta.env.BASE_URL}${outfit?.art ?? 'art/outfit-farm-blue.webp'}" draggable="false">
+      <img class="doll-body" alt="" src="${import.meta.env.BASE_URL}${body}" draggable="false">
       ${extra}
     </div>
     ${petSrc ? `<img class="walker-pet" alt="" src="${petSrc}" draggable="false">` : ''}

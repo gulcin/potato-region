@@ -134,7 +134,7 @@ export function headerHtml(view: View): string {
   return `<div class="title-row">
       <h1>${esc(titleFor(view.route))}</h1>
       <div class="count-pill" data-potato-label aria-label="${total} potatoes">
-        <img src="${art('art/potato-pink.webp')}" alt="" draggable="false">
+        <img src="${art('art/potato-count.webp')}" alt="" draggable="false">
         <span data-potato-total>${total}</span>
       </div>
     </div>

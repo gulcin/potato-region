@@ -146,7 +146,7 @@ textarea { height: 4.5rem; resize: none; }
   font-size: 1.15rem;
 }
 
-.count-pill img { width: 36px; height: 36px; object-fit: contain; }
+.count-pill img { width: 48px; height: 40px; object-fit: contain; }
 
 .bar-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 
@@ -924,6 +924,41 @@ textarea { height: 4.5rem; resize: none; }
   .walker[data-remote="true"] { margin-left: 28px; }
   .walker .doll { height: 120px; width: 78px; }
   .walker-pet { width: 62px; height: 62px; margin: 0 0 2px -14px; }
+  .farm-screen:has([data-self="true"]) .walker {
+    top: 99% !important;
+    transform: translate(-6%, -100%);
+  }
+  .farm-screen:has([data-self="true"]) .walker[data-self="true"] {
+    left: 2% !important;
+  }
+  .farm-screen:has([data-self="true"]) .walker[data-remote="true"] {
+    left: 46% !important;
+    margin-left: 0;
+  }
+  .farm-screen:has([data-self="true"]) .walker .doll {
+    height: 248px;
+    width: 132px;
+  }
+  .farm-screen:has([data-self="true"]) .walker[data-grown="true"] .doll {
+    height: 300px;
+    width: 148px;
+  }
+  .farm-screen:has([data-self="true"]) .walker-pet {
+    width: 124px;
+    height: 124px;
+    margin: 0 0 10px -58px;
+  }
+  .farm-screen:has([data-self="true"]) .walker-name { font-size: 18px; }
+  .farm-screen:has([data-self="true"]) .farm-cast { display: none; }
+  .farm-screen:has([data-self="true"]) .farm-bottom {
+    left: auto;
+    right: 0.3rem;
+    bottom: auto;
+    top: 0.35rem;
+    width: auto;
+    z-index: 8;
+  }
+  .farm-screen:has([data-self="true"]) .plot-grid { bottom: 318px; height: 168px; }
   .basket { flex: 0 0 auto; min-width: 118px; white-space: nowrap; }
   .room-friend { height: 48%; }
 }
@@ -1072,6 +1107,7 @@ textarea { height: 4.5rem; resize: none; }
 }
 
 .walker .doll { height: 240px; width: 156px; }
+.walker[data-grown="true"] .doll { height: 318px; width: 176px; }
 
 .walker-pet {
   width: 108px;
@@ -1142,7 +1178,12 @@ textarea { height: 4.5rem; resize: none; }
   .walker { transform: translate(-40%, -2%); }
   .walker[data-remote="true"] { margin-left: 28px; }
   .walker .doll { height: 120px; width: 78px; }
+  .walker[data-grown="true"] .doll { height: 168px; width: 96px; }
   .walker-pet { width: 62px; height: 62px; margin: 0 0 2px -14px; }
+  .farm-screen:has([data-self="true"]) .walker { transform: translate(-6%, -100%); }
+  .farm-screen:has([data-self="true"]) .walker .doll { height: 248px; width: 132px; }
+  .farm-screen:has([data-self="true"]) .walker[data-grown="true"] .doll { height: 300px; width: 148px; }
+  .farm-screen:has([data-self="true"]) .walker-pet { width: 124px; height: 124px; margin: 0 0 10px -58px; }
   .basket { flex: 0 0 auto; min-width: 118px; }
   .farm-cast { height: 148px; }
   .farm-cast .doll { height: 146px; }

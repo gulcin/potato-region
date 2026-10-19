@@ -14,6 +14,7 @@ ICON_DIR = Path("/workspace/public")
 # name, key (green|magenta|none), mode (body|pet|item|scene|icon)
 JOBS: list[tuple[str, str, str]] = [
     ("girl-farm.jpg", "green", "body"),
+    ("mum.jpg", "green", "body"),
     ("girl-strap.jpg", "green", "body"),
     ("girl-pink.jpg", "green", "body"),
     ("girl-coat.jpg", "green", "body"),
@@ -27,6 +28,7 @@ JOBS: list[tuple[str, str, str]] = [
     ("acc-headband.jpg", "magenta", "item"),
     ("acc-crown.jpg", "magenta", "item"),
     ("acc-hat.jpg", "green", "item"),
+    ("potato-count.jpg", "green", "item"),
     ("potato-blue.jpg", "green", "item"),
     ("potato-green.jpg", "magenta", "item"),
     ("potato-red.jpg", "green", "item"),

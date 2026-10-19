@@ -85,17 +85,16 @@ export function plotWord(plot: Plot): string {
 
 export function plotInner(color: PotatoColor, plot: Plot, phase: string): string {
   const potato = art(potatoArt(color));
-  const bits = [`<img class="soil" alt="" src="${art('art/soil.webp')}" draggable="false">`];
-  if (plot.stage === 'seed') bits.push(`<img class="crop seed" alt="" src="${potato}" draggable="false">`);
-  if (plot.stage === 'watered' && phase === 'sprout') {
-    bits.push(`<img class="crop" alt="" src="${art('art/sprout.webp')}" draggable="false">`);
-  }
-  if (plot.stage === 'watered' && phase !== 'sprout') {
-    bits.push(`<img class="crop" alt="" src="${art('art/leafy.webp')}" draggable="false">`);
-  }
+  const bed = `<img class="bed" alt="" src="${art('art/soil.webp')}" draggable="false">`;
+  const sprout = `<img class="crop sprout" alt="" src="${art('art/sprout.webp')}" draggable="false">`;
+  const leafy = `<img class="crop leafy" alt="" src="${art('art/leafy.webp')}" draggable="false">`;
+  const bits = [bed];
+  if (plot.stage === 'seed' || (plot.stage === 'watered' && phase === 'sprout')) bits.push(sprout);
+  if ((plot.stage === 'watered' && phase !== 'sprout') || plot.stage === 'ready') bits.push(leafy);
   if (plot.stage === 'watered') bits.push(`<img class="splash" alt="" src="${art('art/water.webp')}" draggable="false">`);
   if (plot.stage === 'ready') {
-    bits.push(`<img class="crop" data-harvest-potato data-color="${color}" alt="" src="${potato}" draggable="false">`);
+    bits.push(`<img class="crop ready-potato" data-harvest-potato data-color="${color}" alt="" src="${potato}" draggable="false">`);
+    bits.push('<span class="sparkle" aria-hidden="true"></span>');
   }
   bits.push(`<span class="plot-word">${plotWord(plot)}</span>`);
   return bits.join('');
@@ -155,8 +154,10 @@ function bannerHtml(): string {
 function mapHtml(view: View): string {
   const farms = COLORS.map((color) => `
     <button type="button" class="farm-card" data-goto-farm="${color}" aria-label="${COLOR_LABEL[color]} farm">
-      <img src="${art(potatoArt(color))}" alt="" draggable="false">
-      <span>${COLOR_LABEL[color]}</span>
+      <span class="wood-sign">
+        <img src="${art(potatoArt(color))}" alt="" draggable="false">
+        <span>${COLOR_LABEL[color]}</span>
+      </span>
     </button>`).join('');
   return `<section class="map-screen" data-walk style="background-image:url('${art('art/map-bg.webp')}')">
     <div class="map-body">
@@ -166,7 +167,6 @@ function mapHtml(view: View): string {
           <div class="stroll-pet">${petHtml(view.happy)}</div>
         </div>
         <p class="name-tag" data-pet-label>${esc(state.petName)}</p>
-        <input data-pet-name aria-label="Name your potato" maxlength="12" value="${esc(state.petName)}" autocomplete="off">
       </div>
       <div class="map-main">
         <p class="hint">Pick a place to go.</p>
@@ -198,7 +198,10 @@ function farmHtml(view: View): string {
     </div>
     <div class="plot-grid">${plots}</div>
     <div class="farm-bottom">
-      ${petHtml(view.happy)}
+      <div class="farm-cast">
+        ${dollHtml()}
+        ${petHtml(view.happy)}
+      </div>
       <div class="basket" data-basket>
         <img src="${art('art/basket.webp')}" alt="" draggable="false">
         <span>Basket</span>
@@ -245,7 +248,7 @@ function shopHtml(view: View): string {
     <div class="pay-row">
       <div class="counter-zone" data-counter>
         <div class="count-num" data-counter-count aria-live="polite">${state.counter.length}</div>
-        <p>on the counter</p>
+        <p>Counter</p>
       </div>
       <div class="pocket" data-pocket>${pocket || '<p class="hint">Farm some potatoes first.</p>'}</div>
     </div>
@@ -318,8 +321,12 @@ function houseHtml(view: View): string {
   if (selected && !owns(selected.id)) status = `${selected.name} is in the shop.`;
   else if (selected && isPlaced) status = `${selected.name} is in the room. Drag it, or put it away.`;
   else if (selected) status = `${selected.name}. Tap Place.`;
+  const outfit = itemById(state.outfit) ?? OUTFITS[0];
   return `<section class="house-screen">
-    <div class="room" data-room style="background-image:url('${art('art/house-bg.webp')}')">${placed}</div>
+    <div class="room" data-room style="background-image:url('${art('art/house-bg.webp')}')">
+      <img class="room-friend" alt="" src="${art(outfit.art)}" draggable="false">
+      ${placed}
+    </div>
     <p class="hint" data-house-status>${esc(status)}</p>
     <div class="house-actions">
       <button type="button" data-action="place" ${canPlace ? '' : 'disabled'}>Place</button>

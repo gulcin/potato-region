@@ -237,10 +237,10 @@ function refreshBanner(): void {
 }
 
 const PLOT_SPOTS = [
-  { x: 32, y: 42 },
-  { x: 68, y: 42 },
-  { x: 32, y: 72 },
-  { x: 68, y: 72 },
+  { x: 36, y: 80 },
+  { x: 52, y: 80 },
+  { x: 68, y: 80 },
+  { x: 84, y: 80 },
 ];
 
 function standByPlot(index: number): void {

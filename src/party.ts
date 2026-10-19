@@ -168,8 +168,8 @@ function selfPresence(): Presence {
   };
 }
 
-let selfX = 28;
-let selfY = 62;
+let selfX = 14;
+let selfY = 76;
 let selfAction: FarmAction | null = null;
 let selfActionUntil = 0;
 let selfEmote: Emote | null = null;
@@ -444,6 +444,7 @@ function onGuestData(msg: Msg | null): void {
     }
     const host = msg.players.find((person) => person.id !== playerId);
     message = host ? `You are with ${host.name}.` : 'You are in the farm party.';
+    moveTo(34, 76);
     hooks.onStatus();
     hooks.onPeople();
     hooks.onFarm();

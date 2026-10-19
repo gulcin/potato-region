@@ -104,8 +104,13 @@ test('plays every part of Potato Region', async ({ page }) => {
     return host.__swReg?.updateViaCache === 'none' && host.__versionInits?.includes('no-store');
   });
 
+  await page.locator('[data-goto="dress"]').click();
   await page.locator('[data-pet-name]').fill('Poko');
   await page.locator('[data-pet-name]').blur();
+  await expect(page.locator('[data-pet-label]')).toHaveText('Poko');
+  await page.locator('[data-action="map"]').click();
+  await expect(page.locator('#app')).toHaveAttribute('data-screen', 'map');
+  await expect(page.locator('[data-pet-name]')).toHaveCount(0);
   await expect(page.locator('[data-pet-label]')).toHaveText('Poko');
   await page.locator('[data-action="read"]').click();
   await expect(page.locator('[data-action="read"]')).toHaveText('Quiet');

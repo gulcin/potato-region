@@ -180,7 +180,7 @@ test('a missing code explains itself and the host keeps that code', async ({ bro
 
 test('webkit iPhone guest is told when the farm cannot be found', async () => {
   const hostBrowser = await chromium.launch();
-  const guestBrowser = await webkit.launch({ headless: false });
+  const guestBrowser = await webkit.launch();
   const host = await openPlayer(hostBrowser, 834, 1194);
   const guest = await openPlayer(guestBrowser, 390, 844);
   const turns = await host.evaluate(() => (window as unknown as PartyHooks).__party.iceUrls());

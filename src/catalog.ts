@@ -67,6 +67,7 @@ export const COLOR_LABEL: Record<PotatoColor, string> = {
 };
 
 export const WHATS_NEW = [
+  'Aida has long dark blonde hair and blue eyes.',
   'An update can arrive. Start again keeps your potatoes.',
   'Play together finds a friend again if the iPad screen goes dark.',
   'Play together on one farm.',

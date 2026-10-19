@@ -1,11 +1,22 @@
-import { spawnSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const dist = join(root, 'dist');
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-writeFileSync(join(dist, 'version.json'), `${JSON.stringify({ version: pkg.version }, null, 2)}\n`);
+
+function gitSha() {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA;
+  try {
+    return execSync('git rev-parse HEAD', { cwd: root, encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
+
+const sha = gitSha();
+writeFileSync(join(dist, 'version.json'), `${JSON.stringify({ version: pkg.version, sha }, null, 2)}\n`);
 
 const splash = spawnSync('python3', [join(root, 'scripts/make_splash.py')], { stdio: 'inherit' });
 if (splash.status !== 0) process.exit(splash.status ?? 1);

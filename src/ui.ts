@@ -415,7 +415,11 @@ export function partySlotHtml(): string {
        <button type="button" class="emote" data-emote="wave" aria-label="Wave"><img src="${art('art/emote-wave.webp')}" alt="" draggable="false"></button>
        <button type="button" class="emote" data-emote="dance" aria-label="Potato dance"><img src="${art('art/pet-potato-happy.webp')}" alt="" draggable="false"></button>`
     : '';
+  const hostCode = snap.role === 'host' && snap.code
+    ? `<p class="party-code host-code" data-host-code>${esc(snap.code)}</p>`
+    : '';
   return `<div class="party-bar">
+    ${hostCode}
     <p class="party-msg" data-party-message>${esc(snap.message)}</p>
     ${emotes}
     <button type="button" data-action="party-leave">Alone</button>

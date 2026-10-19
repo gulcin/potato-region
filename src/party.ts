@@ -75,6 +75,16 @@ let moveTimer = 0;
 let sparkleTimer = 0;
 let nappingName = '';
 const playerId = loadPlayerId();
+const PEER_PREFIX = 'aida-potato-';
+const JOIN_NOTICE_MS = 15_000;
+const JOIN_ATTEMPT_MS = 22_000;
+const CANT_FIND = "Can't find that farm. Check the code on Aida's iPad and try again.";
+let holdCode = false;
+let registering = false;
+let joinStarted = 0;
+let joinNoticeTimer = 0;
+let resumeTimer = 0;
+let joinAttempts = 0;
 
 function loadPlayerId(): string {
   const key = 'aida-potato-player';
@@ -106,7 +116,7 @@ export function bindParty(next: Hooks): void {
 }
 
 export function inParty(): boolean {
-  return status === 'hosting' || status === 'joining' || status === 'connected' || status === 'napping';
+  return status === 'hosting' || status === 'joining' || status === 'connected' || status === 'napping' || (status === 'missing' && role === 'guest');
 }
 
 export function partyFarm(): Record<PotatoColor, Plot[]> | null {
@@ -175,36 +185,80 @@ let selfActionUntil = 0;
 let selfEmote: Emote | null = null;
 let selfEmoteUntil = 0;
 
+function peerIdFor(digits: string): string {
+  return `${PEER_PREFIX}${digits}`;
+}
+
+function cloudTest(): boolean {
+  if (import.meta.env.VITE_PARTY_TEST !== '1') return false;
+  try {
+    return sessionStorage.getItem('aida-peer-cloud') === '1';
+  } catch {
+    return false;
+  }
+}
+
 function peerHost(): string {
+  if (cloudTest()) return '0.peerjs.com';
   return import.meta.env.VITE_PEER_HOST || '0.peerjs.com';
+}
+
+function publicIce(): RTCIceServer[] {
+  const ice: RTCIceServer[] = [
+    {
+      urls: [
+        'stun:stun.l.google.com:19302',
+        'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+        'stun:stun.cloudflare.com:3478',
+      ],
+    },
+    {
+      urls: [
+        'turn:standard.relay.metered.ca:80',
+        'turn:standard.relay.metered.ca:80?transport=tcp',
+        'turn:standard.relay.metered.ca:443',
+        'turn:standard.relay.metered.ca:443?transport=tcp',
+        'turns:standard.relay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+  ];
+  const extra = import.meta.env.VITE_TURN_URL;
+  if (extra) {
+    ice.push({
+      urls: extra.split(',').map((item) => item.trim()).filter(Boolean),
+      username: import.meta.env.VITE_TURN_USERNAME || undefined,
+      credential: import.meta.env.VITE_TURN_CREDENTIAL || undefined,
+    });
+  }
+  return ice;
 }
 
 function peerOptions(): PeerOptions {
   const host = peerHost();
-  const local = host === '127.0.0.1' || host === 'localhost';
-  const secure = import.meta.env.VITE_PEER_SECURE
-    ? import.meta.env.VITE_PEER_SECURE === 'true'
-    : !local;
-  const ice: RTCIceServer[] = [];
-  if (!local) {
-    ice.push({ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] });
-    const turn = import.meta.env.VITE_TURN_URL;
-    if (turn) {
-      ice.push({
-        urls: turn.split(',').map((item) => item.trim()).filter(Boolean),
-        username: import.meta.env.VITE_TURN_USERNAME || undefined,
-        credential: import.meta.env.VITE_TURN_CREDENTIAL || undefined,
-      });
-    }
-  }
+  const local = !cloudTest() && (host === '127.0.0.1' || host === 'localhost');
+  const secure = cloudTest()
+    ? true
+    : import.meta.env.VITE_PEER_SECURE
+      ? import.meta.env.VITE_PEER_SECURE === 'true'
+      : !local;
   return {
     host,
-    port: Number(import.meta.env.VITE_PEER_PORT || (secure ? 443 : 9000)),
-    path: import.meta.env.VITE_PEER_PATH || '/',
+    port: cloudTest() ? 443 : Number(import.meta.env.VITE_PEER_PORT || (secure ? 443 : 9000)),
+    path: cloudTest() ? '/' : (import.meta.env.VITE_PEER_PATH || '/'),
     secure,
-    config: { iceServers: ice },
+    config: {
+      iceServers: local ? [] : publicIce(),
+      sdpSemantics: 'unified-plan',
+    },
     debug: import.meta.env.VITE_PARTY_TEST === '1' ? 1 : 0,
   };
+}
+
+function hostLine(detail: string): string {
+  return code ? `Code ${code}. ${detail}` : detail;
 }
 
 function randomCode(): string {
@@ -231,6 +285,11 @@ export function leaveParty(): void {
   life += 1;
   leaving = true;
   window.clearTimeout(retryTimer);
+  window.clearTimeout(joinNoticeTimer);
+  window.clearTimeout(resumeTimer);
+  holdCode = false;
+  registering = false;
+  joinStarted = 0;
   if (hostConn) send(hostConn, { t: 'bye', id: playerId });
   for (const conn of conns.values()) send(conn, { t: 'bye', id: playerId });
   destroyPeer();
@@ -253,38 +312,99 @@ export function startParty(): void {
   leaving = false;
   role = 'host';
   status = 'hosting';
+  holdCode = false;
   farm = freshFarm();
   message = 'Opening the farm party…';
   hooks.onStatus();
   openHost(randomCode(), 0);
 }
 
+function hostRegistered(): boolean {
+  return Boolean(peer && !peer.destroyed && peer.open && !peer.disconnected);
+}
+
+function resumeHost(): void {
+  if (leaving || role !== 'host' || !code || registering || hostRegistered()) return;
+  window.clearTimeout(resumeTimer);
+  resumeTimer = window.setTimeout(() => {
+    if (leaving || role !== 'host' || !code || registering || hostRegistered()) return;
+    holdCode = true;
+    message = hostLine('Opening the farm party again…');
+    status = remotes.size > 0 ? 'napping' : 'hosting';
+    hooks.onStatus();
+    if (peer && !peer.destroyed && peer.disconnected) {
+      try {
+        registering = true;
+        const node = peer;
+        peer.reconnect();
+        window.setTimeout(() => {
+          if (!leaving && role === 'host' && peer === node && !hostRegistered()) {
+            registering = false;
+            openHost(code, 0);
+          }
+        }, 3000);
+        return;
+      } catch {
+        registering = false;
+      }
+    }
+    openHost(code, 0);
+  }, 250);
+}
+
 function openHost(nextCode: string, attempt: number): void {
   destroyPeer();
+  registering = true;
   code = nextCode;
-  const node = new Peer(`pr${nextCode}`, peerOptions());
+  const born = life;
+  const node = new Peer(peerIdFor(nextCode), peerOptions());
   peer = node;
   node.on('open', () => {
-    status = 'hosting';
-    message = 'Waiting for a friend…';
+    if (born !== life || role !== 'host') return;
+    registering = false;
+    holdCode = true;
+    const names = [...remotes.values()].map((person) => person.name);
+    status = names.length > 0 ? 'connected' : 'hosting';
+    message = names.length > 0 ? hostLine(`${names.join(' and ')} is here.`) : hostLine('Waiting for a friend.');
     void paintQr();
     hooks.onStatus();
     hooks.onFarm();
   });
   node.on('connection', (conn) => welcomeGuest(conn));
   node.on('disconnected', () => {
-    if (!leaving && role === 'host') node.reconnect();
+    if (born !== life || leaving || role !== 'host' || peer !== node) return;
+    registering = false;
+    resumeHost();
+  });
+  node.on('close', () => {
+    if (born !== life || leaving || role !== 'host' || peer !== node) return;
+    registering = false;
+    resumeHost();
   });
   node.on('error', (err: PeerError<string>) => {
-    if (err.type === 'unavailable-id' && attempt < 6 && !leaving) {
-      openHost(randomCode(), attempt + 1);
+    if (born !== life || leaving || role !== 'host' || (peer && peer !== node)) return;
+    registering = false;
+    if (err.type === 'unavailable-id') {
+      if (holdCode) {
+        message = hostLine('Opening the farm party again…');
+        hooks.onStatus();
+        window.setTimeout(() => {
+          if (!leaving && role === 'host' && code === nextCode) openHost(code, attempt + 1);
+        }, 1200);
+        return;
+      }
+      if (attempt < 6) {
+        openHost(randomCode(), attempt + 1);
+        return;
+      }
+    }
+    if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error' || err.type === 'socket-closed' || err.type === 'disconnected') {
+      resumeHost();
       return;
     }
-    if (!leaving && role === 'host') {
-      message = 'The party line is sleepy. Try again.';
-      status = 'missing';
-      hooks.onStatus();
-    }
+    message = hostLine('The party line is sleepy. Try again.');
+    status = 'missing';
+    hooks.onStatus();
   });
 }
 
@@ -363,6 +483,14 @@ function forget(id: string, nap: boolean): void {
   hooks.onPeople();
 }
 
+function markJoinWait(): void {
+  if (leaving || role !== 'guest' || status === 'connected' || status === 'full') return;
+  if (!joinStarted || Date.now() - joinStarted < JOIN_NOTICE_MS) return;
+  status = 'missing';
+  message = CANT_FIND;
+  hooks.onStatus();
+}
+
 export function joinParty(raw: string): void {
   const next = raw.replace(/\D/g, '').slice(0, 4);
   if (next.length !== 4) {
@@ -375,7 +503,11 @@ export function joinParty(raw: string): void {
   role = 'guest';
   code = next;
   status = 'joining';
+  joinStarted = Date.now();
+  joinAttempts = 0;
   message = 'Looking for the farm party…';
+  window.clearTimeout(joinNoticeTimer);
+  joinNoticeTimer = window.setTimeout(markJoinWait, JOIN_NOTICE_MS);
   hooks.onStatus();
   openGuest();
 }
@@ -383,10 +515,14 @@ export function joinParty(raw: string): void {
 function openGuest(): void {
   life += 1;
   const born = life;
+  joinAttempts += 1;
   destroyPeer();
   const node = new Peer(peerOptions());
   peer = node;
-  node.on('open', () => connectHost());
+  node.on('open', () => {
+    if (born !== life || leaving || role !== 'guest') return;
+    connectHost();
+  });
   node.on('disconnected', () => {
     if (born !== life || leaving || role !== 'guest') return;
     try { node.reconnect(); } catch { scheduleRetry(); }
@@ -399,11 +535,15 @@ function openGuest(): void {
 function connectHost(): void {
   if (!peer || leaving || role !== 'guest') return;
   const born = life;
-  const conn = peer.connect(`pr${code}`, { reliable: true });
+  const conn = peer.connect(peerIdFor(code), { reliable: true });
   hostConn = conn;
   const timer = window.setTimeout(() => {
-    if (status === 'joining' || status === 'napping') scheduleRetry();
-  }, 6000);
+    if (born !== life || leaving || role !== 'guest') return;
+    if (status === 'connected' || status === 'full') return;
+    try { conn.close(); } catch { /* the attempt already ended */ }
+    markJoinWait();
+    scheduleRetry();
+  }, JOIN_ATTEMPT_MS);
   conn.on('open', () => {
     window.clearTimeout(timer);
     send(conn, { t: 'hello', player: selfPresence() });
@@ -412,11 +552,13 @@ function connectHost(): void {
   conn.on('close', () => {
     window.clearTimeout(timer);
     if (born !== life || leaving || role !== 'guest') return;
-    status = 'napping';
-    message = nappingName
-      ? `${nappingName}'s connection took a nap – reconnecting…`
-      : 'The farm party connection took a nap – reconnecting…';
-    hooks.onStatus();
+    if (status === 'connected') {
+      status = 'napping';
+      message = nappingName
+        ? `${nappingName}'s connection took a nap – reconnecting…`
+        : 'The farm party connection took a nap – reconnecting…';
+      hooks.onStatus();
+    }
     scheduleRetry();
   });
   conn.on('error', () => {
@@ -434,6 +576,8 @@ function onGuestData(msg: Msg | null): void {
     return;
   }
   if (msg.t === 'welcome') {
+    window.clearTimeout(joinNoticeTimer);
+    joinStarted = 0;
     status = 'connected';
     farm = cloneFarm(msg.farm);
     remotes.clear();
@@ -471,17 +615,19 @@ function onGuestData(msg: Msg | null): void {
 }
 
 function scheduleRetry(): void {
-  if (leaving || role !== 'guest') return;
+  if (leaving || role !== 'guest' || status === 'full') return;
   window.clearTimeout(retryTimer);
-  status = status === 'connected' ? 'napping' : status === 'napping' ? 'napping' : 'joining';
+  if (status === 'connected') status = 'napping';
+  else if (status !== 'napping' && status !== 'missing') status = 'joining';
   if (status === 'napping' && !message.includes('nap')) {
     message = 'The farm party connection took a nap – reconnecting…';
     hooks.onStatus();
   }
+  markJoinWait();
   retryTimer = window.setTimeout(() => {
     if (leaving || role !== 'guest') return;
     openGuest();
-  }, 900);
+  }, status === 'napping' ? 900 : 1000);
 }
 
 function remember(person: Presence): void {
@@ -739,6 +885,24 @@ function animate(): void {
 
 requestAnimationFrame(animate);
 
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (role === 'host') resumeHost();
+  if (role === 'guest' && status !== 'connected' && status !== 'full' && status !== 'idle') {
+    window.clearTimeout(retryTimer);
+    openGuest();
+  }
+});
+
+window.addEventListener('pageshow', () => {
+  if (role === 'host') resumeHost();
+});
+
+window.setInterval(() => {
+  if (document.visibilityState === 'hidden') return;
+  if (role === 'host') resumeHost();
+}, 4000);
+
 export function dropConnectionForTest(): void {
   leaving = false;
   hostConn?.close();
@@ -753,13 +917,31 @@ export function dropConnectionForTest(): void {
   }
 }
 
+function severSignallingForTest(): void {
+  registering = false;
+  peer?.destroy();
+  peer = null;
+}
+
 if (import.meta.env.VITE_PARTY_TEST === '1') {
   const testWindow = window as Window & {
-    __party?: { drop: () => void; code: () => string; status: () => PartyStatus };
+    __party?: {
+      drop: () => void;
+      sever: () => void;
+      code: () => string;
+      status: () => PartyStatus;
+      peerId: () => string;
+      attempts: () => number;
+      iceUrls: () => string[];
+    };
   };
   testWindow.__party = {
     drop: dropConnectionForTest,
+    sever: severSignallingForTest,
     code: () => code,
     status: () => status,
+    peerId: () => (peer && !peer.destroyed ? peer.id : ''),
+    attempts: () => joinAttempts,
+    iceUrls: () => publicIce().flatMap((server) => (Array.isArray(server.urls) ? server.urls : [server.urls])),
   };
 }

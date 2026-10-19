@@ -5,6 +5,15 @@ All notable changes to Potato Region are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-10-19
+
+### Fixed
+
+- The Home Screen app was keeping an old copy of the page, so Update ready reloaded the same game.
+- Opening Potato Region now asks the network for the page first. A saved copy is used only when the iPad is offline.
+- A new version shows Update ready. One tap turns on the waiting copy and reloads once.
+- If an old copy is stuck, the next open replaces it. Start again, for grown-ups, clears the saved pages and keeps potatoes, clothes, and the house.
+
 ## [1.1.1] - 2026-10-19
 
 ### Fixed

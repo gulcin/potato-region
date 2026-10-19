@@ -356,7 +356,11 @@ function grownupsHtml(view: View): string {
     : '<li>No notes yet.</li>';
   return `<section class="panel-screen">
     <p data-version>Version v${esc(APP_VERSION)}</p>
-    <button type="button" data-action="check-updates">Check for updates</button>
+    <div class="grownup-actions">
+      <button type="button" data-action="check-updates">Check for updates</button>
+      <button type="button" data-action="start-again">Start again</button>
+    </div>
+    <p class="hint">Start again clears the saved pages. Potatoes, clothes, and the house stay.</p>
     <p data-update-status>${esc(view.updateStatus)}</p>
     <button type="button" data-action="whatsnew">What's new</button>
     <button type="button" data-action="sound" aria-pressed="${state.sound ? 'true' : 'false'}">${state.sound ? 'Sound on' : 'Sound off'}</button>

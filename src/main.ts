@@ -46,7 +46,7 @@ import {
   type Plot,
 } from './state';
 import { numberWords, speak } from './speech';
-import { APP_VERSION, applyUpdate, checkForUpdates, initUpdates, isUpdateReady } from './updates';
+import { APP_VERSION, applyUpdate, checkForUpdates, initUpdates, isUpdateReady, startAgain } from './updates';
 import {
   headerHtml,
   modalHtml,
@@ -134,6 +134,8 @@ function render(): void {
   root.dataset.screen = current.route.screen;
   root.dataset.farm = current.route.farm ?? '';
   root.dataset.potatoColors = COLORS.join(',');
+  root.dataset.booted = '1';
+  root.dataset.appVersion = APP_VERSION;
   header.innerHTML = headerHtml(current);
   stage.innerHTML = stageHtml(current);
   modal.innerHTML = modalHtml(current);
@@ -505,6 +507,10 @@ function onClick(event: Event): void {
   }
   if (action === 'reload-update') {
     applyUpdate();
+    return;
+  }
+  if (action === 'start-again') {
+    void startAgain();
     return;
   }
   if (action === 'check-updates') {

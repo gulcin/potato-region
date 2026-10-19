@@ -346,7 +346,9 @@ textarea { height: 4.5rem; resize: none; }
 .dest-grid button { min-height: 48px; }
 
 .update-banner { display: flex; justify-content: center; }
-.update-banner button { min-width: 160px; }
+.update-banner button { min-width: 180px; min-height: 56px; }
+.grownup-actions { display: flex; gap: 0.3rem; }
+.grownup-actions button { flex: 1 1 0; min-width: 0; }
 
 .farm-screen {
   display: block;

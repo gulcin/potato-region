@@ -8,6 +8,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Potato Region">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta http-equiv="Cache-Control" content="no-cache">
     <title>Potato Region</title>
     <style>html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}</style>
     <link rel="icon" href="/potato-region/favicon-32.png" sizes="32x32">
@@ -34,6 +35,86 @@
       <main id="stage"></main>
       <div id="modal-root"></div>
     </div>
+    <script>
+      (function () {
+        var RELOADS = 'potato-region.bootReloads';
+        var booted = false;
+        var root = document.getElementById('app');
+        if (navigator.serviceWorker) {
+          navigator.serviceWorker.addEventListener('message', function (event) {
+            var data = event.data;
+            if (data && data.type === 'POTATO_PING' && event.ports && event.ports[0]) {
+              event.ports[0].postMessage({ type: 'POTATO_PONG' });
+            }
+          });
+        }
+        if (window.MutationObserver && root) {
+          new MutationObserver(function () {
+            if (root.getAttribute('data-booted') === '1') {
+              booted = true;
+              try { sessionStorage.removeItem(RELOADS); } catch (error) {}
+            }
+          }).observe(root, { attributes: true, attributeFilter: ['data-booted'] });
+        }
+        function startAgain() {
+          var pending = navigator.serviceWorker
+            ? navigator.serviceWorker.getRegistrations().then(function (regs) {
+                return Promise.all(regs.map(function (reg) { return reg.unregister(); }));
+              })
+            : Promise.resolve();
+          pending
+            .then(function () {
+              if (!window.caches) return;
+              return caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (key) { return caches.delete(key); }));
+              });
+            })
+            .then(function () {
+              try {
+                sessionStorage.removeItem(RELOADS);
+                sessionStorage.removeItem('potato-region.swReloads');
+              } catch (error) {}
+              var next = new URL(location.href);
+              next.searchParams.delete('potato-fresh');
+              next.searchParams.set('potato-fresh', String(Date.now()));
+              location.replace(next.href);
+            })
+            .catch(function () { location.reload(); });
+        }
+        function showRescue() {
+          if (document.getElementById('potato-rescue')) return;
+          var box = document.createElement('div');
+          box.id = 'potato-rescue';
+          box.setAttribute('role', 'alert');
+          box.style.cssText = 'position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:24px;background:#f6efe2;color:#3a2918;font-family:Nunito,sans-serif;text-align:center';
+          box.innerHTML = '<div><h1 style="font-size:28px;margin:0 0 8px">Potato Region needs a fresh start</h1><p style="font-size:18px;margin:0 0 16px">Your potatoes, clothes, and house are still saved.</p><button type="button" id="potato-start-again" data-action="start-again" style="font:700 18px Nunito,sans-serif;min-height:52px;padding:12px 22px;border:0;border-radius:999px;background:#e2b56a;color:#3a2918">Start again</button></div>';
+          document.body.appendChild(box);
+          document.getElementById('potato-start-again').addEventListener('click', startAgain);
+        }
+        function bootFailed() {
+          if (booted) return;
+          var count = 1;
+          try { count = Number(sessionStorage.getItem(RELOADS) || '0'); } catch (error) { count = 1; }
+          if (count < 1) {
+            try { sessionStorage.setItem(RELOADS, '1'); } catch (error) {}
+            var next = new URL(location.href);
+            next.searchParams.set('potato-fresh', String(Date.now()));
+            location.replace(next.href);
+            return;
+          }
+          showRescue();
+        }
+        window.addEventListener('error', function (event) {
+          var target = event.target;
+          if (!target || !target.tagName) return;
+          if (target.tagName === 'SCRIPT') bootFailed();
+          if (target.tagName === 'LINK' && String(target.rel || '').indexOf('stylesheet') !== -1) bootFailed();
+        }, true);
+        window.setTimeout(function () {
+          if (!booted) bootFailed();
+        }, 15000);
+      })();
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -33,7 +33,7 @@ export default defineConfig({
   projects: [
     ...viewports.map((viewport) => ({
       name: viewport.name,
-      testIgnore: /party\.spec\.ts/,
+      testIgnore: /party\.spec\.ts|update-webkit\.spec\.ts/,
       use: {
         viewport: { width: viewport.width, height: viewport.height },
         hasTouch: true,
@@ -41,6 +41,16 @@ export default defineConfig({
         isMobile: viewport.name.startsWith('iphone'),
       },
     })),
+    {
+      name: 'update-webkit',
+      testMatch: /update-webkit\.spec\.ts/,
+      timeout: 240_000,
+      use: {
+        browserName: 'webkit',
+        viewport: { width: 1194, height: 834 },
+        hasTouch: true,
+      },
+    },
     {
       name: 'play-together',
       testMatch: /party\.spec\.ts/,

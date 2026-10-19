@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  readonly VITE_APP_VERSION?: string;
   readonly VITE_FEEDBACK_URL?: string;
   readonly VITE_PEER_HOST?: string;
   readonly VITE_PEER_PORT?: string;
